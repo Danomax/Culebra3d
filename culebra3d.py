@@ -1,13 +1,14 @@
 from kivy.app import App
 from kivy.core.window import Window
 from kivy.uix.widget import Widget
+
 from kivy.uix.image import Image
-from kivy.graphics import Color, Line
-from kivy.graphics.vertex_instructions import Rectangle
+from kivy.graphics import Color, Line, Rectangle, Mesh
 from kivy.clock import Clock
 from kivy.uix.label import Label
 
 import random 
+import os
 from math import atan
 from math import atan2, pi
 
@@ -75,6 +76,7 @@ class Grid_Object():
           return True 
     return False
 
+
 class SnakePart(Grid_Object):
   '''
   Dibuja una parte de la culebra, el source depende de que parte es 
@@ -84,22 +86,26 @@ class SnakePart(Grid_Object):
     self.next_snake = None
     self.prev_snake = None
     self.texture_index = 0
+    self.shadow_index = 0
 
   def append_snake(self,pose):
     if self.pose == []:
       self.update_pose(pose)
+      return self
     else:
-      if self.next_snake != None:
-        self.next_snake.append_snake(pose)
+      if self.prev_snake == None:
+        self.prev_snake = SnakePart()
+        self.prev_snake.update_pose(pose)
+        self.prev_snake.next_snake = self
+        return self.prev_snake
       else:
-        self.next_snake = SnakePart()
-        self.next_snake.update_pose(pose)
-        self.next_snake.prev_snake = self
+        return self
 
   def update_pose(self,pose):
     if self.next_snake != None:
       self.next_snake.update_pose(self.pose)
     self.pose = pose
+
 
   def update_source(self):
     if self.next_snake == None and self.prev_snake == None:
@@ -193,7 +199,99 @@ class SnakePart(Grid_Object):
     else:
       result = [self.texture_index]
     return result
+
+  def get_shadows(self):
+    '''
+    entrega un [] de las texturas de las sombras 
+    '''
+    if self.next_snake != None:
+      result = [self.shadow_index] + self.next_snake.get_shadows()
+    else:
+      result = [self.shadow_index]
+    return result
+
     
+  def get_tail(self):
+    if self.next_snake == None:
+      return self
+    else:
+      return self.next_snake.get_tail()
+
+  def update_shadow(self):
+    if self.next_snake == None and self.prev_snake == None:
+      return
+    elif self.next_snake != None and self.prev_snake == None:
+      #Cabeza de la culebra
+      diff_next = [pos - next for pos,next in zip(self.pose,self.next_snake.pose)]
+      if diff_next == [0,1,0]:
+          self.shadow_index = 1
+      elif diff_next == [0,-1,0]:
+          self.shadow_index = 1
+      elif diff_next == [-1,0,0]:
+          self.shadow_index = 3
+      elif diff_next == [1,0,0]:
+          self.shadow_index = 2
+      elif diff_next == [0,0,-1]:
+          self.shadow_index = 5
+      elif diff_next == [0,0,1]:
+          self.shadow_index = 4
+      self.next_snake.update_shadow()
+
+    elif self.next_snake == None and self.prev_snake != None:
+      #Cola de la culebra
+      diff_prev = [prev - pos for pos,prev in zip(self.pose,self.prev_snake.pose)]
+      if diff_prev == [0,1,0]:
+          self.shadow_index = 1
+      elif diff_prev == [0,-1,0]:
+          self.shadow_index = 1
+      elif diff_prev == [-1,0,0]:
+          self.shadow_index = 2
+      elif diff_prev == [1,0,0]:
+          self.shadow_index = 3
+      elif diff_prev == [0,0,-1]:
+          self.shadow_index = 4
+      elif diff_prev == [0,0,1]:
+          self.shadow_index = 5
+
+    elif self.next_snake != None and self.prev_snake != None:
+      #cuerpo de la culebra
+      diff_next = [self - next for self,next in zip(self.pose,self.next_snake.pose)]
+      diff_prev = [prev - pos for pos,prev in zip(self.pose,self.prev_snake.pose)]
+      if (diff_prev == [0,1,0] and diff_next == [0,1,0]) or (diff_prev == [0,-1,0] and diff_next == [0,-1,0]) :
+        self.shadow_index = 1 #34
+      elif (diff_prev == [1,0,0] and diff_next == [1,0,0]) or (diff_prev == [-1,0,0] and diff_next == [-1,0,0]) :
+        self.shadow_index = 6 #33
+      elif (diff_prev == [0,0,1] and diff_next == [0,0,1]) or (diff_prev == [0,0,-1] and diff_next == [0,0,-1]) :
+        self.shadow_index = 7 #32
+      # x to z
+      elif (diff_prev == [1,0,0] and diff_next == [0,0,-1]) or (diff_prev == [0,0,1] and diff_next == [-1,0,0]) :
+        self.shadow_index = 10 #16  
+      elif (diff_prev == [0,0,1] and diff_next == [1,0,0]) or (diff_prev == [-1,0,0] and diff_next == [0,0,-1]) :
+        self.shadow_index = 8  #43  
+      elif (diff_prev == [1,0,0] and diff_next == [0,0,1]) or (diff_prev == [0,0,-1] and diff_next == [-1,0,0]) :
+        self.shadow_index = 11 #17  
+      elif (diff_prev == [0,0,-1] and diff_next == [1,0,0]) or (diff_prev == [-1,0,0] and diff_next == [0,0,1]) :
+        self.shadow_index = 9  #15  
+      #y yo z 
+      elif (diff_prev == [0,1,0] and diff_next == [0,0,-1]) or (diff_prev == [0,0,1] and diff_next == [0,-1,0]) :
+        self.shadow_index = 5  #40
+      elif (diff_prev == [0,0,1] and diff_next == [0,1,0]) or (diff_prev == [0,-1,0] and diff_next == [0,0,-1]) :
+        self.shadow_index = 5  #42
+      elif (diff_prev == [0,1,0] and diff_next == [0,0,1]) or (diff_prev == [0,0,-1] and diff_next == [0,-1,0]) :
+        self.shadow_index = 4  #39
+      elif (diff_prev == [0,-1,0] and diff_next == [0,0,1]) or (diff_prev == [0,0,-1] and diff_next == [0,1,0]) :
+        self.shadow_index = 4  #41
+      #x to y
+      elif (diff_prev == [1,0,0] and diff_next == [0,1,0]) or (diff_prev == [0,-1,0] and diff_next == [-1,0,0]) :
+        self.shadow_index = 3  #38 
+      elif (diff_prev == [1,0,0] and diff_next == [0,-1,0]) or (diff_prev == [0,1,0] and diff_next == [-1,0,0]) :
+        self.shadow_index = 3  #36 
+      elif (diff_prev == [0,-1,0] and diff_next == [1,0,0]) or (diff_prev == [-1,0,0] and diff_next == [0,1,0]) :
+        self.shadow_index = 2  #37 
+      elif (diff_prev == [0,1,0] and diff_next == [1,0,0]) or (diff_prev == [-1,0,0] and diff_next == [0,-1,0]) :
+        self.shadow_index = 2  #35 
+      self.next_snake.update_shadow()
+
 class Food(Grid_Object):
   '''
   Dibuja el alimento 
@@ -201,7 +299,19 @@ class Food(Grid_Object):
   def __init__(self,**kwargs):
     super(Food,self).__init__(**kwargs)
     self.texture_index = 44
+    self.shadow_index = 1
 
+  def update_pose(self,pose):
+    self.pose = pose
+
+class Pose_Cube(Grid_Object):
+  '''
+  cubo referencia de posicion
+  '''
+  def __init__(self,**kwargs):
+    super(Pose_Cube,self).__init__(**kwargs)
+    self.texture_index = 31
+    self.shadow_index = 12 #0
   def update_pose(self,pose):
     self.pose = pose
 
@@ -209,8 +319,6 @@ class Score(Label):
   def __init__(self,**kwargs):
     super(Score,self).__init__(**kwargs)
     self.text = 'score:'
-    self.size = (600,30)
-    #self.pos=(0,0)
     mycolor = [1,1,1,1] # White
     with self.canvas:
       Color(*mycolor)
@@ -221,15 +329,24 @@ class Score(Label):
 
 class BoardGame(Widget):
   #Aqui se dibuja todo el lugar donde se mueve la culebra
-  def __init__(self):
-    super(BoardGame,self).__init__()
-    self.size = (600,600)
-    
+  def __init__(self,**kwargs):
+    super(BoardGame,self).__init__(**kwargs)
+    self.draw_cubes = False
     self.mylayout = 10
-    self.tilewidth,self.tileheight = (50,50)
+    self.tilewidth,self.tileheight = (int(self.width/self.mylayout),int(self.height/self.mylayout))
     self.snake_size = 3
-    self.grid = (10,10,10)  #grilla del cubo donde se mueve la culebra
+    self.grid = [self.mylayout]*3  #grilla del cubo donde se mueve la culebra
     self.grid_snake = []    #mantiene una matriz que es true en las celdas ocupadas por la culebra
+    if self.draw_cubes:
+      self.grid_cubes = []
+      for i in range(self.grid[0]):
+        self.grid_cubes.append([])
+        for j in range(self.grid[1]):
+          self.grid_cubes[i].append([])
+          for k in range(self.grid[2]):
+            self.grid_cubes[i][j].append(Pose_Cube())
+            self.grid_cubes[i][j][k].update_pose([i,j,k])
+            
     for i in range(self.grid[0]):
       self.grid_snake.append([])
       for j in range(self.grid[1]):
@@ -238,29 +355,23 @@ class BoardGame(Widget):
           self.grid_snake[i][j].append(False)
     self.snake = SnakePart() #objetos de la culebra
     for i in range(self.snake_size):
-      [x,y,z] = [int(self.grid[0]/2-i),int(self.grid[1]/2),int(self.grid[2]/2)]
+      [x,y,z] = [int(self.grid[0]/2+i),int(self.grid[1]/2),int(self.grid[2]/2)]
       self.grid_snake[x][y][z] = True
-      position = self.get_position([x,y,z])
-      self.snake.append_snake([x,y,z])
+      self.snake = self.snake.append_snake([x,y,z])
     self.snake.update_source()
-    positions = self.get_positions(self.snake.get_poses())
-    textures = self.snake.get_textures()
-    for pos,tex in zip(positions,textures):
-      self.Draw(alpha=1.0,view_position=pos,texture_index=tex)
+    self.snake.update_shadow()
+
     self.food = Food()
     self.food.update_pose(self.new_food_pos())
-    view_position = self.get_position(self.food.pose)
-    self.Draw(alpha=1.0,view_position=view_position,texture_index=self.food.texture_index)
 
   def get_position(self,pose):
     '''
     dada la posicion matricial pose calcula la posicion donde debe ir el objeto
     en la pantalla
     '''
-    deltax = self.width*0.06*pose[0]
-    deltay = self.height*0.06*pose[1]
-    deltaz = (self.width*0.012 + self.height*0.012)*pose[2]
-    return (deltax+deltaz,deltay+deltaz)
+    deltax = (pose[0]+(pose[2]*0.7071/2))*(self.width*0.74/10) #+(self.width*0.75/10)
+    deltay = (pose[1]+(pose[2]*0.7071/2))*(self.height*0.74/10)+(self.height*0.74/10)
+    return (deltax,deltay)
 
   def get_positions(self,poses):
     '''
@@ -271,6 +382,23 @@ class BoardGame(Widget):
       positions += [self.get_position(pos)]
     return positions
 
+  def get_shadow_position(self,pose):
+    '''
+    dada la posicion matricial pose calcula la posicion donde debe ir la sombra
+    '''
+    deltax = (pose[0]+pose[2]*0.7071/2)*(self.width*0.74/10) 
+    deltay = (pose[2])*(self.height*0.26/10)+self.height*0.74+(self.height*0.26/10)
+    return (deltax,deltay)
+
+  def get_shadow_positions(self,poses):
+    '''
+    calcula las posiciones de las sombras de una serie de objetos
+    '''
+    shadow_positions = []
+    for pos in poses:
+      shadow_positions += [self.get_shadow_position(pos)]
+    return shadow_positions
+
   def new_food_pos(self):
     '''
     retorna nueva posicion para la comida luego de ser devorada
@@ -278,10 +406,8 @@ class BoardGame(Widget):
     #encuentra el numero de espacios libres en la grilla
     empty_spaces = self.grid[0]*self.grid[1]*self.grid[2]
     empty_spaces = empty_spaces - self.snake_size
-    print('empty spaces:' + str(empty_spaces))
     #escoge el numero aleatorio entre 1 y empty_spaces
     choose_num = random.randint(1,empty_spaces)
-    print('choose num:' + str(choose_num))
     #encuentra el espacio evitando los espacios ocupados por la culebra
     num=0
     for i in range(self.grid[0]):
@@ -301,43 +427,104 @@ class BoardGame(Widget):
       mycolor = [1,1,1,1] # White
       Color(*mycolor)
       Rectangle(pos=(0,0),size=(self.size))
-      mycolor = [0,0,0,1]
+      mycolor = [1,0,0,0.9]
       Color(*mycolor)
-      Line(points=[1,100,1,600],width=2)
-      Line(points=[1,600,500,600],width=2)
-      Line(points=[500,100,500,600],width=2)
-      Line(points=[1,100,500,100],width=2)
-      mycolor = [1,1,0,1] #yellow
+      Line(points=[1,self.height*0.26,1,self.height],width=2)
+      Line(points=[1,self.height,self.width*0.74,self.height],width=2)
+      Line(points=[self.width*0.74,self.height*0.26,self.width*0.74,self.height],width=2)
+      Line(points=[1,self.height*0.26,self.width*0.74,self.height*0.26],width=2)
+      mycolor = [0.8,0.8,0,0.9]
+      Color(*mycolor)
+      Rectangle(pos=(3,(self.height*0.26)+3),size=(self.width*0.73,self.height*0.73))
+      mycolor = [1,0,0,0.8]
+      Color(*mycolor)
+      Line(points=[1,self.height*0.26,self.width*0.26,1],width=2)
+      Line(points=[self.width*0.74,self.height*0.26,self.width,1],width=2)
+      Line(points=[self.width*0.74,self.height,self.width,self.height*0.74],width=2)
       
+    if self.draw_cubes:
+      for i in range(self.grid[0]):
+        for j in range(self.grid[1]):
+          for k in range(self.grid[2]):
+            myalpha = 1.0 - (k/(2*self.grid[2]))
+            view_position = self.get_position(self.grid_cubes[i][j][k].pose)
+            self.Draw(alpha=myalpha,view_position=view_position,texture_index=self.grid_cubes[i][j][k].texture_index) 
+            
       
     #actualiza la posicion de la cabeza de acuerdo a la direccion
     if self.parent.direction != [0,0,0]:
       old_head_pose = self.snake.pose
       newpos = [pose+direc for pose,direc in zip(self.snake.pose,self.parent.direction) ]
-      #se debe actualizar las posiciones de la culebra y añadir un cuerpo en la cola
-      self.snake.update_pose(newpos) 
-      #chequear si ha chocado consigo misma
-      if self.grid_snake[newpos[0]][newpos[1]][newpos[2]]:
-        self.parent.game_over()
-        return
-      #actualiza la grilla grid_snake con la nueva posicion
-      if self.snake.in_grid(self.grid):
-        self.grid_snake[newpos[0]][newpos[1]][newpos[2]] = True
-      else:
-        self.parent.game_over()
-      if self.snake.same_pose(self.food.pose):
-        #Se come el alimento
-        self.score += 100
+      #chequar si se comio el alimento
+      if self.food.same_pose(newpos):
+        [x,y,z] = self.food.pose
+        self.parent.scorevalue += 100
         self.food.update_pose(self.new_food_pos())
+        self.grid_snake[x][y][z] = True
+        self.snake = self.snake.append_snake([x,y,z])
+      else:
+        lastpose = self.snake.get_tail().pose
+        #se debe actualizar las posiciones de la culebra y añadir un cuerpo en la cola
+        self.snake.update_pose(newpos) 
+        #actualiza la grilla grid_snake con la nueva posicion
+        if self.snake.in_grid(self.grid):
+          #chequear si ha chocado consigo misma
+          if self.grid_snake[newpos[0]][newpos[1]][newpos[2]]:
+            self.parent.game_over()
+            return
+          else:
+            self.grid_snake[newpos[0]][newpos[1]][newpos[2]] = True
+            self.grid_snake[lastpose[0]][lastpose[1]][lastpose[2]] = False
+        else:
+          #La culebra se salio de la grilla
+          self.parent.game_over()
+
     #actualiza las formas de los cuerpos de la culebra
     self.snake.update_source()
-    positions = self.get_positions(self.snake.get_poses())
+    self.snake.update_shadow()
+
+    poses = self.snake.get_poses()
+    positions = self.get_positions(poses)
+    shadow_positions = self.get_shadow_positions(poses)
     textures = self.snake.get_textures()
-    for pos,tex in zip(positions,textures):
+    shadows = self.snake.get_shadows()
+
+    for position,tex in zip(shadow_positions,shadows):
+      #dibuja las sombras
+      self.Draw(alpha=1.0,view_position=position,texture_index=tex)                
+
+    #sombra del alimento
+    view_position = self.get_shadow_position(self.food.pose)
+    myalpha = 1.0    
+    self.Draw(alpha=myalpha,view_position=view_position,texture_index=self.food.shadow_index)
+    food_position = self.get_position(self.food.pose)
+    for_draw = zip([pri[1] for pri in poses]+[self.food.pose[1]],poses + [self.food.pose],positions + [food_position],textures+[self.food.texture_index])
+    #for_draw = sorted(for_draw)
+    
+    for priority,pose,position,tex in for_draw:
+      myalpha = 1.0 - (pose[2]/(2*self.grid[2]))
+      self.Draw(alpha=myalpha,view_position=position,texture_index=tex)
+    #for pose,position,tex in zip(poses,positions,textures):
       #dibuja a la culebra
-      self.Draw(alpha=1.0,view_position=pos,texture_index=tex)                
-    view_position = self.get_position(self.food.pose)
-    self.Draw(alpha=1.0,view_position=view_position,texture_index=self.food.texture_index)
+    #  myalpha = 1.0 - (pose[2]/(2*self.grid[2]))
+    #  self.Draw(alpha=myalpha,view_position=position,texture_index=tex)                
+
+    #dibuja el alimento
+    #view_position = self.get_position(self.food.pose)
+    #myalpha = 1.0 - (self.food.pose[2]/(2*self.grid[2]))
+    #self.Draw(alpha=myalpha,view_position=view_position,texture_index=self.food.texture_index)
+
+    #Dibujar las partes del cubo que están delante de los objetos de la grilla
+    with self.canvas:
+      mycolor = [1,0,0,0.4] # 
+      Color(*mycolor)
+      Line(points=[1,self.height,self.width*0.26,self.height*0.74],width=2)
+      Line(points=[self.width*0.26,self.height*0.74,self.width,self.height*0.74],width=2)
+      Line(points=[self.width*0.26,1,self.width*0.26,self.height*0.74],width=2)
+      Line(points=[self.width*0.26,1,self.width,1],width=2)
+      Line(points=[self.width,1,self.width,self.height*0.74],width=2)
+
+
 
   def Draw(self,alpha,view_position,texture_index):
     with self.canvas:
@@ -350,32 +537,34 @@ class BoardGame(Widget):
 class Game(Widget):
   def __init__(self):
     super(Game, self).__init__()
-     
+    if os.name == 'nt':
+      self.size = 495,550
+    elif os.name == 'posix':
+      self.size = Window.size
     self.direction = [0,0,0]
-    self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
-    self._keyboard.bind(on_key_down=self._on_keyboard_down)
-    self.score = Score()
-    self.score.pos = (0,0)
+    if os.name == 'nt':
+      self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
+      self._keyboard.bind(on_key_down=self._on_keyboard_down)
+    self.score = Score(size=(self.width,int(self.height*0.1)))
+    self.score.y = self.height - self.score.height
     self.add_widget(self.score)
     self.scorevalue = 0
-    
-    self.board = BoardGame()
+    self.board = BoardGame(size=(self.width,int(self.height*0.9)))
+    self.board.y = 0
     self.add_widget(self.board)
-    self.size = self.board.size[0],self.score.size[1]+self.board.size[1]
     Clock.schedule_interval(self.board.update, 1.0/GAME_SPEED)
     Clock.schedule_interval(self.update, 1.0/GAME_SPEED)
 
   def update(self,*ignore):    
-    debug_text = ''
-    positions = self.board.snake.get_poses()
-    for pos in positions:
-      debug_text += str(pos)+','
-    diff_next = [self - next for self,next in zip(positions[1],positions[2])]
-    diff_prev = [prev - pos for pos,prev in zip(positions[1],positions[0])]
+    debug_text = 'board size = ' + str(self.board.width) + ',' + str(self.board.height)
+    #positions = self.board.snake.get_poses()
+    #for pos in positions:
+    #  debug_text += str(pos)+','
+    #diff_next = [self - next for self,next in zip(positions[1],positions[2])]
+    #diff_prev = [prev - pos for pos,prev in zip(positions[1],positions[0])]
 
-    debug_text += '\n diff prev:' + str(diff_prev) + ', diff next:' + str(diff_next) 
-    self.score.update(debug_text)
-
+    #debug_text += '\n diff prev:' + str(diff_prev) + ', diff next:' + str(diff_next) 
+    self.score.update(str(self.scorevalue)+';'+debug_text)
 
   def _keyboard_closed(self):
     self._keyboard.unbind(on_key_down=self._on_keyboard_down)
@@ -416,7 +605,8 @@ class Game(Widget):
 class Culebra3DApp(App):
   def build(self):
     game = Game()
-    Window.size = game.size
+    if os.name == 'nt':
+      Window.size = game.size
     return game
 
 if __name__ == "__main__":
