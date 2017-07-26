@@ -7,12 +7,21 @@ from kivy.graphics import Color, Line, Rectangle, Mesh
 from kivy.clock import Clock
 from kivy.uix.label import Label
 
+from kivy.core.audio import SoundLoader
+
 import random 
 import os
 from math import atan
 from math import atan2, pi
 
 GAME_SPEED = 2
+
+def sort_multiple_list(zipped_lists,key_list = 0):
+  '''
+  obtiene las listas ordenadas a partir de la lista especificada en key_list. Las listas debieran tener el mismo tamaño
+  '''
+  sorted_lists = map(list,zip(*sorted([z for z in zipped_lists],key=lambda elem:elem[key_list])))
+  return sorted_lists
 
 def direction(pos_ini,pos_end):
   '''
@@ -24,13 +33,13 @@ def direction(pos_ini,pos_end):
   if angle < (2*pi/8) and angle >= -(1*pi/8):
     direc=[1,0,0]
   elif angle < (5*pi/8) and angle >= (2*pi/8):
-    direc=[0,1,0]
+    direc=[0,-1,0]
   elif angle < (7*pi/8) and angle >= (5*pi/8):
     direc=[0,0,-1]
   elif angle < (-6*pi/8) or angle >= (7*pi/8):
     direc=[-1,0,0]
   elif angle < (-3*pi/8) and angle >= (-6+pi/8):
-    direc=[0,-1,0]
+    direc=[0,1,0]
   elif angle < (-1*pi/8) and angle >= (-3*pi/8):
     direc=[0,0,1]
   return direc
@@ -337,6 +346,7 @@ class BoardGame(Widget):
     self.snake_size = 3
     self.grid = [self.mylayout]*3  #grilla del cubo donde se mueve la culebra
     self.grid_snake = []    #mantiene una matriz que es true en las celdas ocupadas por la culebra
+    self.paused = True
     if self.draw_cubes:
       self.grid_cubes = []
       for i in range(self.grid[0]):
@@ -363,6 +373,9 @@ class BoardGame(Widget):
 
     self.food = Food()
     self.food.update_pose(self.new_food_pos())
+
+    Clock.schedule_once(self.update)
+    self.sound_eat = SoundLoader.load('snakehiss.wav')
 
   def get_position(self,pose):
     '''
@@ -459,6 +472,7 @@ class BoardGame(Widget):
       if self.food.same_pose(newpos):
         [x,y,z] = self.food.pose
         self.parent.scorevalue += 100
+        if self.sound_eat.state=='stop': self.sound_eat.play()
         self.food.update_pose(self.new_food_pos())
         self.grid_snake[x][y][z] = True
         self.snake = self.snake.append_snake([x,y,z])
@@ -497,15 +511,22 @@ class BoardGame(Widget):
     view_position = self.get_shadow_position(self.food.pose)
     myalpha = 1.0    
     self.Draw(alpha=myalpha,view_position=view_position,texture_index=self.food.shadow_index)
+
     food_position = self.get_position(self.food.pose)
-    for_draw = zip([pri[1] for pri in poses]+[self.food.pose[1]],poses + [self.food.pose],positions + [food_position],textures+[self.food.texture_index])
-    #for_draw = sorted(for_draw)
-    
-    for priority,pose,position,tex in for_draw:
-      myalpha = 1.0 - (pose[2]/(2*self.grid[2]))
-      self.Draw(alpha=myalpha,view_position=position,texture_index=tex)
+    priorities = [pri[2] for pri in poses]+[self.food.pose[2]]
+    positions = positions + [food_position]
+    textures = textures + [self.food.texture_index]
+    for_draw = zip(priorities,positions,textures)
+    #print(str(len(priorities))+','+str(len(positions))+','+str(len(textures)))
+    #sorted_draw = map(list,zip(*sorted(for_draw))) #caga el for draw!
+    #sorted_draw = sort_multiple_list(zip(priorities,positions,textures))
+    s_priorities,s_positions,s_textures = sort_multiple_list(zip(priorities,positions,textures))
+    #Dibuja los elementos (culebra, alimento) considerando la prioridad (eje z profundidad)
+    for priority,position,texture in zip(s_priorities,s_positions,s_textures):
+      myalpha = 1.0 - (priority/(2*self.grid[2]))
+      self.Draw(alpha=myalpha,view_position=position,texture_index=texture)
     #for pose,position,tex in zip(poses,positions,textures):
-      #dibuja a la culebra
+    #  #dibuja a la culebra
     #  myalpha = 1.0 - (pose[2]/(2*self.grid[2]))
     #  self.Draw(alpha=myalpha,view_position=position,texture_index=tex)                
 
@@ -537,11 +558,13 @@ class BoardGame(Widget):
 class Game(Widget):
   def __init__(self):
     super(Game, self).__init__()
+    self.paused = True
     if os.name == 'nt':
       self.size = 495,550
     elif os.name == 'posix':
       self.size = Window.size
     self.direction = [0,0,0]
+    self.velocity = GAME_SPEED
     if os.name == 'nt':
       self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
       self._keyboard.bind(on_key_down=self._on_keyboard_down)
@@ -552,19 +575,18 @@ class Game(Widget):
     self.board = BoardGame(size=(self.width,int(self.height*0.9)))
     self.board.y = 0
     self.add_widget(self.board)
-    Clock.schedule_interval(self.board.update, 1.0/GAME_SPEED)
-    Clock.schedule_interval(self.update, 1.0/GAME_SPEED)
 
   def update(self,*ignore):    
-    debug_text = 'board size = ' + str(self.board.width) + ',' + str(self.board.height)
+    info_text = ''
+    #info_text = 'board size = ' + str(self.board.width) + ',' + str(self.board.height)
     #positions = self.board.snake.get_poses()
     #for pos in positions:
-    #  debug_text += str(pos)+','
+    #  info_text += str(pos)+','
     #diff_next = [self - next for self,next in zip(positions[1],positions[2])]
     #diff_prev = [prev - pos for pos,prev in zip(positions[1],positions[0])]
-
-    #debug_text += '\n diff prev:' + str(diff_prev) + ', diff next:' + str(diff_next) 
-    self.score.update(str(self.scorevalue)+';'+debug_text)
+    #info_text += '\n diff prev:' + str(diff_prev) + ', diff next:' + str(diff_next) 
+    if self.paused: info_text += 'Paused.'
+    self.score.update(str(self.scorevalue)+';'+info_text)
 
   def _keyboard_closed(self):
     self._keyboard.unbind(on_key_down=self._on_keyboard_down)
@@ -572,7 +594,7 @@ class Game(Widget):
 
   def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
     if keycode[1] == 'd' and self.direction != [-1,0,0]:
-      self.direction = [1,0,0] 
+      self.direction = [1,0,0]
     elif keycode[1] == 'a' and self.direction != [1,0,0]:
       self.direction = [-1,0,0]
     elif keycode[1] == 'w' and self.direction != [0,1,0]:
@@ -583,6 +605,9 @@ class Game(Widget):
       self.direction = [0,0,-1]
     elif keycode[1] == 'c' and self.direction != [0,0,-1]:
       self.direction = [0,0,1]
+    if self.paused: self.pause()
+    elif keycode[1] == 'p':
+      self.pause()
     return True
 
   def on_touch_down(self, touch): 
@@ -594,13 +619,22 @@ class Game(Widget):
     direc = direction(self.pos_ini,self.pos_end)
     if [dir+dire for dir,dire in zip(direc,self.direction)]!= [0,0,0]:
       self.direction = direc 
+    if self.paused: self.pause()
 
   def game_over(self):
     self.clear_widgets()
-    Clock.unschedule(self.board.update)
-    Clock.unschedule(self.update)
+    self.pause()
     self.__init__()
 
+  def pause(self):
+    if not self.paused:
+      Clock.unschedule(self.board.update)
+      Clock.unschedule(self.update)
+      self.paused = True
+    else:
+      Clock.schedule_interval(self.board.update,1/self.velocity)
+      Clock.schedule_interval(self.update,1/self.velocity)
+      self.paused = False
 
 class Culebra3DApp(App):
   def build(self):
