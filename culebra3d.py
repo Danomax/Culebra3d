@@ -60,7 +60,7 @@ Textures.load_chars('culebra3d_06')
 
 class Grid_Object():
   '''
-  cualquier objeto que esetá dentro de la grilla, puede ser SnakePart o Food, u otro (portales, muros, etc)
+  cualquier objeto que esta dentro de la grilla, puede ser SnakePart o Food, u otro (portales, muros, etc)
   '''
   def __init__(self,**kwargs):
     self.pose = []
@@ -435,7 +435,7 @@ class BoardGame(Widget):
       
   def update(self,*ignore):
     self.canvas.clear()
-    #Dibujar las partes del cubo que están detrás de los objetos de la grilla
+    #Dibujar las partes del cubo que estan detras de los objetos de la grilla
     with self.canvas:
       mycolor = [1,1,1,1] # White
       Color(*mycolor)
@@ -535,7 +535,7 @@ class BoardGame(Widget):
     #myalpha = 1.0 - (self.food.pose[2]/(2*self.grid[2]))
     #self.Draw(alpha=myalpha,view_position=view_position,texture_index=self.food.texture_index)
 
-    #Dibujar las partes del cubo que están delante de los objetos de la grilla
+    #Dibujar las partes del cubo que estan delante de los objetos de la grilla
     with self.canvas:
       mycolor = [1,0,0,0.4] # 
       Color(*mycolor)
